@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Christmas Gift Tracker · Joshua, Jude &amp; Joey</title>
+<meta name="description" content="Track Christmas presents for Joshua, Jude and Joey: ideas, saved items, budgets and what's bought.">
+<meta name="theme-color" content="#0f1a17">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎁</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">🎄</span>
+    <div>
+      <h1>Gift Tracker</h1>
+      <p class="sub">Joshua · Jude · Joey</p>
+    </div>
+  </div>
+  <div class="countdown" id="countdown" aria-live="polite"></div>
+  <button class="icon-btn" id="themeBtn" title="Toggle light/dark" aria-label="Toggle light or dark theme">🌓</button>
+</header>
+
+<nav class="tabs" id="tabs" role="tablist"></nav>
+
+<main id="main"></main>
+
+<footer class="foot">
+  <div class="foot-actions">
+    <button class="btn ghost" id="exportBtn">⬇️ Export backup</button>
+    <label class="btn ghost" for="importFile">⬆️ Import backup</label>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+  <p class="muted small">Everything is saved on this device only (browser storage). No accounts, no tracking. Export a backup now and then, especially before switching phones.</p>
+</footer>
+
+<dialog id="itemDialog">
+  <form method="dialog" id="itemForm" class="dlg">
+    <h3 id="itemDialogTitle">Add item</h3>
+    <label>For
+      <select name="kidId" id="fKid"></select>
+    </label>
+    <label>Item name
+      <input name="name" required maxlength="140" placeholder="e.g. White gaming desk">
+    </label>
+    <label>Link <span class="muted small">(paste from any shop)</span>
+      <input name="link" type="url" inputmode="url" placeholder="https://…">
+    </label>
+    <div class="row2">
+      <label>Price (£)
+        <input name="price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+      </label>
+      <label>Shop
+        <input name="shop" list="shopList" maxlength="60" placeholder="Auto from link">
+      </label>
+    </div>
+    <datalist id="shopList"></datalist>
+    <div class="row2">
+      <label>Priority
+        <select name="priority">
+          <option value="1">🔥 Must-have</option>
+          <option value="2" selected>⭐ Really want</option>
+          <option value="3">🙂 Nice to have</option>
+        </select>
+      </label>
+      <label>Status
+        <select name="status">
+          <option>Idea</option><option selected>Saved</option><option>Bought</option><option>Wrapped</option>
+        </select>
+      </label>
+    </div>
+    <label>Notes
+      <textarea name="notes" rows="2" maxlength="500" placeholder="Size, colour, where to hide it…"></textarea>
+    </label>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger ghost" id="deleteItemBtn" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="cancelItemBtn">Cancel</button>
+      <button type="submit" class="btn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="catalogue.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
