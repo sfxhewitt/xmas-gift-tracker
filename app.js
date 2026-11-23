@@ -415,7 +415,7 @@
   // ---------- add from a pasted product link
   // The app has no server, so shop pages are read through public CORS relays, tried in turn.
   // Your own Cloudflare Worker (see worker/worker.js). Leave empty to use only the public relays.
-  var FETCHER_URL = '';
+  var FETCHER_URL = 'https://gift-fetcher.sfxhewitt.workers.dev/';
   var RELAYS = [
     { id: 'allorigins', make: function (u) { return { url: 'https://api.allorigins.win/raw?url=' + enc(u) }; } },
     { id: 'reader', make: function (u) { return { url: 'https://r.jina.ai/' + u, kind: 'reader', opts: { headers: { Accept: 'application/json' } } }; } },
