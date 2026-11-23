@@ -10,7 +10,7 @@
   var KID_COLOURS = ['var(--josh)', 'var(--jude)', 'var(--joey)', '#c084fc', '#f472b6'];
 
   var SHOPS = [
-    { id: 'amazon', name: 'Amazon', url: function (q) { return 'https://www.amazon.co.uk/s?k=' + enc(q); }, host: /amazon\./ },
+    { id: 'amazon', name: 'Amazon', url: function (q) { return 'https://www.amazon.co.uk/s?k=' + enc(q); }, host: /amazon\.|amzn\.|a\.co$/ },
     { id: 'argos', name: 'Argos', url: function (q) { return 'https://www.argos.co.uk/search/' + enc(q).replace(/%20/g, '-') + '/'; }, host: /argos\./ },
     { id: 'smyths', name: 'Smyths', url: function (q) { return 'https://www.smythstoys.com/uk/en-gb/search/?text=' + enc(q); }, host: /smythstoys\./ },
     { id: 'johnlewis', name: 'John Lewis', url: function (q) { return 'https://www.johnlewis.com/search?search-term=' + enc(q); }, host: /johnlewis\./ },
@@ -102,7 +102,7 @@
   }
   function fix(s) {
     s.dismissed = s.dismissed || {}; s.settings = s.settings || {};
-    s.items.forEach(function (i) { i.priority = +i.priority || 2; if (STATUSES.indexOf(i.status) < 0) i.status = 'Saved'; });
+    s.items.forEach(function (i) { delete i.fetching; i.priority = +i.priority || 2; if (STATUSES.indexOf(i.status) < 0) i.status = 'Saved'; });
     s.kids.forEach(function (k) { k.interests = Array.isArray(k.interests) ? k.interests : []; });
     return s;
   }
@@ -246,12 +246,14 @@
 
     // list
     h += '<section class="card"><h2>🎁 Gift list <span class="right"><button class="btn sm primary" data-act="addItem" data-kid="' + kid.id + '">+ Add item</button></span></h2>' +
+      '<form class="searchbox linkadd" data-act="addLink" data-kid="' + kid.id + '"><input name="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔗 Paste a product link…" aria-label="Paste a product link to add it to the list"><button class="btn green">Add</button></form>' +
+      '<p class="muted small" style="margin:6px 0 0">Paste a link from any shop and the name, price, shop and picture are filled in and it goes straight into <b>To buy</b>.</p>' +
       '<div class="filters">' + ['All', 'To buy'].concat(STATUSES).map(function (s) {
         var c = s === 'All' ? its.length : s === 'To buy' ? counts.Idea + counts.Saved : counts[s];
         return '<button class="chip ' + (f === s ? 'on' : '') + '" data-act="filter" data-kid="' + kid.id + '" data-v="' + s + '">' + s + ' (' + c + ')</button>';
       }).join('') + '</div>' +
       '<div class="items">' + (shown.length ? shown.map(function (i) { return itemRow(i, false); }).join('') :
-        '<div class="empty">Nothing here yet. Tap <b>Find ideas</b> below or <b>+ Add item</b> to paste a link.</div>') + '</div></section>';
+        '<div class="empty">Nothing here yet. Paste a product link above, or tap <b>Find ideas</b> below.</div>') + '</div></section>';
 
     // ideas
     var all = ideasFor(kid), n = ui.ideaShow[kid.id] || 12, list = all.slice(0, n);
@@ -285,15 +287,17 @@
       '<button class="btn sm ghost" data-act="dismiss" data-kid="' + kid.id + '" data-c="' + c.id + '" title="Hide this idea">Not for them</button></div></div>';
   }
   function itemRow(i, money) {
-    var kid = getKid(i.kidId), link = safeUrl(i.link);
+    var kid = getKid(i.kidId), link = safeUrl(i.link), img = safeUrl(i.image);
     var q = i.searchQ || i.name;
     return '<div class="item" data-item="' + i.id + '">' +
       '<div class="pri" title="' + PRI_LABEL[i.priority] + '">' + PRI[i.priority] + '</div>' +
+      '<div class="body">' + (img ? '<img class="thumb" src="' + esc(img) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') +
       '<div><div class="nm">' + (link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">' + esc(i.name) + '</a>' : esc(i.name)) + '</div>' +
       '<div class="meta">' + (money && kid ? '<span style="color:' + kidColour(kid) + ';font-weight:700">' + esc(kid.name) + '</span>' : '') +
       (i.shop ? '<span>🏬 ' + esc(i.shop) + '</span>' : '') +
       (!link ? '<a target="_blank" rel="noopener noreferrer" href="' + esc(SHOPS[6].url(q)) + '">🔎 find prices</a>' : '') +
-      (i.notes ? '<span>📝 ' + esc(i.notes) + '</span>' : '') + '</div></div>' +
+      (i.fetching ? '<span class="fetching">⏳ getting details…</span>' : '') +
+      (i.notes ? '<span>📝 ' + esc(i.notes) + '</span>' : '') + '</div></div></div>' +
       '<div class="side"><span class="price">' + (num(i.price) == null ? '<span class="muted">£?</span>' : gbp(i.price, i.estimate)) + '</span>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
       (money ? '<button class="btn sm green" data-act="markBought" data-id="' + i.id + '">✓ Bought</button>' :
@@ -344,9 +348,9 @@
   }
 
   // ---------- item dialog
-  var dlg = $('#itemDialog'), form = $('#itemForm'), editingId = null;
+  var dlg = $('#itemDialog'), form = $('#itemForm'), editingId = null, pendingImage = null;
   function openItem(opts) {
-    editingId = opts.id || null;
+    editingId = opts.id || null; pendingImage = null;
     var it = editingId ? state.items.filter(function (i) { return i.id === editingId; })[0] : null;
     $('#fKid').innerHTML = state.kids.map(function (k) { return '<option value="' + k.id + '">' + esc(kidLabel(k)) + '</option>'; }).join('');
     $('#shopList').innerHTML = SHOPS.slice(0, 6).map(function (s) { return '<option value="' + s.name + '">'; }).join('') + EXTRA_HOSTS.map(function (h) { return '<option value="' + esc(h[1]) + '">'; }).join('');
@@ -368,9 +372,10 @@
     if (link && !safeUrl(link)) { if (safeUrl('https://' + link)) link = 'https://' + link; else { toast('That link doesn’t look right'); return; } }
     var data = { kidId: form.kidId.value, name: name, link: link, price: num(form.price.value), shop: form.shop.value.trim() || shopFromUrl(link),
       notes: form.notes.value.trim(), priority: +form.priority.value, status: form.status.value };
+    if (pendingImage && pendingImage.url === link && pendingImage.image) data.image = pendingImage.image;
     if (editingId) {
       var it = state.items.filter(function (i) { return i.id === editingId; })[0];
-      if (it) { if (num(it.price) !== data.price) it.estimate = false; Object.assign(it, data); }
+      if (it) { if (num(it.price) !== data.price) it.estimate = false; if (it.link !== data.link && !data.image) delete it.image; Object.assign(it, data); }
       toast('Saved ✓');
     } else { data.id = uid(); data.created = Date.now(); state.items.push(data); toast('Added to ' + getKid(data.kidId).name + '’s list 🎁'); }
     save(); closeItem(); render();
@@ -380,6 +385,216 @@
     if (!editingId || !confirm('Remove this item from the list?')) return;
     state.items = state.items.filter(function (i) { return i.id !== editingId; });
     save(); closeItem(); render(); toast('Removed');
+  });
+
+  // ---------- add from a pasted product link
+  // The app has no server, so shop pages are read through public CORS relays, tried in turn.
+  var RELAYS = [
+    function (u) { return { url: 'https://api.allorigins.win/raw?url=' + enc(u) }; },
+    function (u) { return { url: 'https://api.codetabs.com/v1/proxy/?quest=' + enc(u) }; },
+    function (u) { return { url: 'https://corsproxy.io/?url=' + enc(u) }; },
+    function (u) { return { url: 'https://r.jina.ai/' + u, json: true, opts: { headers: { Accept: 'application/json' } } }; }
+  ];
+  var BLOCKED = /robot check|access denied|just a moment|attention required|are you a human|captcha|pardon our interruption|security check|verify you are|request blocked|page not found|^\s*(403|404|error)\b/i;
+
+  function extractUrl(text) {
+    text = String(text || '').trim();
+    var m = text.match(/https?:\/\/[^\s<>"']+/i);
+    if (m) return safeUrl(m[0].replace(/[),.;!]+$/, ''));
+    if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(text)) return safeUrl('https://' + text);
+    return '';
+  }
+  function parsePrice(v) {
+    if (typeof v === 'number') return v > 0 && v < 100000 ? v : null;
+    var s = String(v == null ? '' : v).replace(/[^\d.,]/g, '');
+    if (!s) return null;
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) s = s.replace(/,/g, '');
+    else if (/,\d{2}$/.test(s)) s = s.replace(',', '.');
+    else s = s.replace(/,/g, '');
+    var n = parseFloat(s);
+    return isFinite(n) && n > 0 && n < 100000 ? Math.round(n * 100) / 100 : null;
+  }
+  function cleanName(name, url) {
+    name = String(name || '').replace(/\s+/g, ' ').trim();
+    if (!name) return '';
+    var shop = norm(shopFromUrl(url)), host = '';
+    try { host = new URL(url).hostname.replace(/^www\./, '').split('.')[0]; } catch (e) {}
+    function shopish(seg) {
+      var n = norm(seg).replace(/[^a-z0-9 ]/g, '');
+      if (!n) return true;
+      var squashed = n.replace(/ /g, '');
+      return (shop && squashed.indexOf(shop.replace(/[^a-z0-9]/g, '')) >= 0) || (host.length > 2 && squashed.indexOf(host.replace(/[^a-z0-9]/g, '')) >= 0) ||
+        /^(buy|shop|home|official( site| store)?|free delivery.*|toys ?& ?games|pc ?& ?video games|electronics( ?& ?photo)?|books|clothing|home ?& ?kitchen|sports ?& ?outdoors|computers ?& ?accessories)$/.test(n);
+    }
+    var parts = name.split(/\s+[|–—]\s+|\s+-\s+|\s*:\s+/);
+    while (parts.length > 1 && shopish(parts[parts.length - 1])) parts.pop();
+    while (parts.length > 1 && shopish(parts[0])) parts.shift();
+    if (parts.length) { var first = name.indexOf(parts[0]), lastP = parts[parts.length - 1], last = name.lastIndexOf(lastP) + lastP.length; name = name.slice(first, last); }
+    name = name.replace(/^buy\s+/i, '').trim();
+    return name.length > 140 ? name.slice(0, 137).replace(/\s+\S*$/, '') + '…' : name;
+  }
+  function nameFromUrl(url) {
+    try {
+      var segs = new URL(url).pathname.split('/').map(function (s) { try { return decodeURIComponent(s); } catch (e) { return s; } });
+      var best = '';
+      segs.forEach(function (s) {
+        s = s.replace(/\.(html?|php|aspx?)$/i, '');
+        var words = s.split(/[-_+ ]+/).filter(function (w) { return /[a-z]{2,}/i.test(w); });
+        if (words.length >= 2 && s.length > best.length) best = s;
+      });
+      if (!best) return '';
+      best = best.replace(/[-_+]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return cap(best).slice(0, 140);
+    } catch (e) { return ''; }
+  }
+  function absUrl(u, base) { try { return safeUrl(new URL(String(u), base).href); } catch (e) { return ''; } }
+  function pick(v) { if (Array.isArray(v)) v = v[0]; if (v && typeof v === 'object') v = v.url || v.contentUrl || v['@id'] || ''; return v ? String(v) : ''; }
+
+  function findProduct(node, depth) {
+    if (!node || typeof node !== 'object' || depth > 6) return null;
+    if (Array.isArray(node)) { for (var i = 0; i < node.length; i++) { var r = findProduct(node[i], depth + 1); if (r) return r; } return null; }
+    var t = node['@type'], types = Array.isArray(t) ? t : [t];
+    if (types.some(function (x) { return /^(Product|ProductGroup|IndividualProduct|Book|VideoGame)$/i.test(String(x || '')); }) && node.name) return node;
+    var keys = ['@graph', 'mainEntity', 'mainEntityOfPage', 'itemListElement', 'item', 'hasVariant'];
+    for (var k = 0; k < keys.length; k++) { var r2 = findProduct(node[keys[k]], depth + 1); if (r2) return r2; }
+    return null;
+  }
+  function offerPrice(o) {
+    if (!o) return null;
+    if (Array.isArray(o)) { var best = null; o.forEach(function (x) { var p = offerPrice(x); if (p && (!best || p.price < best.price)) best = p; }); return best; }
+    if (typeof o !== 'object') return null;
+    var ps = Array.isArray(o.priceSpecification) ? o.priceSpecification[0] : o.priceSpecification;
+    var price = parsePrice(o.price != null ? o.price : o.lowPrice != null ? o.lowPrice : ps && ps.price);
+    if (price == null && o.offers) return offerPrice(o.offers);
+    return price == null ? null : { price: price, currency: String(o.priceCurrency || (ps && ps.priceCurrency) || '').toUpperCase() };
+  }
+
+  function parseProductHtml(html, url) {
+    var doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+    function meta(names) {
+      for (var i = 0; i < names.length; i++) {
+        var m = doc.querySelector('meta[property="' + names[i] + '"],meta[name="' + names[i] + '"],meta[itemprop="' + names[i] + '"]');
+        if (m && m.getAttribute('content')) return m.getAttribute('content').trim();
+      }
+      return '';
+    }
+    function txt(sel) { var e = doc.querySelector(sel); return e ? (e.getAttribute('content') || e.textContent || '').trim() : ''; }
+    var out = { name: '', price: null, image: '', currency: '' };
+
+    $$('script[type="application/ld+json"]', doc).some(function (s) {
+      var data; try { data = JSON.parse(s.textContent); } catch (e) { return false; }
+      var p = findProduct(data, 0); if (!p) return false;
+      out.name = String(p.name || ''); out.image = pick(p.image);
+      var op = offerPrice(p.offers); if (op) { out.price = op.price; out.currency = op.currency; }
+      return true;
+    });
+
+    var title = (doc.querySelector('title') || {}).textContent || '';
+    if (!out.name && BLOCKED.test(title)) return null;
+    if (!out.name && /enter the characters you see below|unusual traffic|enable javascript and cookies to continue/i.test((doc.body && doc.body.textContent || '').slice(0, 4000))) return null;
+
+    // Amazon doesn't publish structured data, so read its page furniture directly.
+    if (!out.name) out.name = txt('#productTitle') || txt('#ebooksProductTitle');
+    if (out.price == null) out.price = parsePrice(txt('#corePrice_feature_div .a-offscreen') || txt('#corePriceDisplay_desktop_feature_div .a-offscreen') || txt('#apex_desktop .a-offscreen') || txt('#priceblock_ourprice') || txt('#price_inside_buybox'));
+    if (!out.image) { var li = doc.querySelector('#landingImage,#imgBlkFront'); if (li) out.image = li.getAttribute('data-old-hires') || li.getAttribute('src') || ''; }
+
+    if (!out.name) out.name = meta(['og:title', 'twitter:title']) || txt('h1[itemprop="name"],[itemprop="name"]') || txt('h1') || title;
+    if (out.price == null) {
+      out.price = parsePrice(meta(['product:price:amount', 'og:price:amount', 'product:sale_price:amount', 'twitter:data1']) || txt('[itemprop="price"]') || txt('[data-test="product-price-primary"],[data-testid="product-price"],.product-price,.pdp-price'));
+      out.currency = out.currency || meta(['product:price:currency', 'og:price:currency']).toUpperCase() || txt('[itemprop="priceCurrency"]').toUpperCase();
+    }
+    if (!out.image) out.image = meta(['og:image', 'og:image:secure_url', 'twitter:image', 'twitter:image:src']);
+
+    out.name = cleanName(out.name, url);
+    out.image = out.image && !/^data:/i.test(out.image) ? absUrl(out.image, url) : '';
+    if (!out.name || BLOCKED.test(out.name)) return null;
+    return out;
+  }
+  function parseReaderJson(j, url) {
+    var d = j && j.data; if (!d || !d.title) return null;
+    var name = cleanName(d.title, url); if (!name || BLOCKED.test(name)) return null;
+    var m = String(d.content || '').match(/£\s?(\d[\d,]*(?:\.\d{1,2})?)/);
+    return { name: name, price: m ? parsePrice(m[1]) : null, image: '', currency: 'GBP', guess: true };
+  }
+
+  function fetchVia(relay, url, ms) {
+    var r = relay(url), opts = r.opts || {}, ctl = window.AbortController ? new AbortController() : null, timer;
+    if (ctl) { opts.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, ms); }
+    return fetch(r.url, opts).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return r.json ? res.json().then(function (j) { return parseReaderJson(j, url); }) : res.text().then(function (h) { return parseProductHtml(h, url); });
+    }).then(function (v) { clearTimeout(timer); return v; }, function () { clearTimeout(timer); return null; });
+  }
+  // Resolves with { name, price, image, ... } or null. Stops as soon as a relay gives both a name and a price.
+  function fetchProduct(url) {
+    var best = null, i = 0;
+    function next() {
+      if (i >= RELAYS.length || !window.fetch) return Promise.resolve(best);
+      return fetchVia(RELAYS[i++], url, 10000).then(function (info) {
+        if (info) {
+          if (!best) best = info;
+          else { if (best.price == null && info.price != null) { best.price = info.price; best.priceGuess = !!info.guess; best.currency = info.currency; } if (!best.image && info.image) best.image = info.image; }
+          if (info === best && info.guess && info.price != null) best.priceGuess = true;
+        }
+        return best && best.price != null ? best : next();
+      });
+    }
+    return next();
+  }
+
+  function addFromLink(kidId, raw) {
+    var kid = getKid(kidId); if (!kid) return;
+    var url = extractUrl(raw);
+    if (!url) { toast('Paste a full product link, e.g. https://www.argos.co.uk/…'); return; }
+    if (state.items.some(function (i) { return i.kidId === kidId && i.link === url; })) { toast('That link is already on ' + kid.name + '’s list'); return; }
+    // Share sheets often paste "Product name https://…": use that text as the name if it's there.
+    var hint = String(raw).replace(/https?:\/\/[^\s<>"']+/i, '').replace(/\s+/g, ' ').trim();
+    hint = hint.length >= 3 ? cleanName(hint, url) : '';
+    var shop = shopFromUrl(url), placeholder = hint || nameFromUrl(url) || 'Item from ' + (shop || 'link');
+    if (BANNED.test(placeholder)) { toast('That one’s off the list 🚫'); return; }
+    var item = { id: uid(), kidId: kidId, name: placeholder, link: url, price: null, shop: shop, notes: '', priority: 2, status: 'Saved', created: Date.now(), fetching: true };
+    state.items.push(item);
+    var f = ui.filter[kidId]; if (f && f !== 'All' && f !== 'To buy' && f !== 'Saved') ui.filter[kidId] = 'To buy';
+    save(); render(); toast('Added to ' + kid.name + '’s To buy list. Getting the details…');
+
+    fetchProduct(url).then(function (info) {
+      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) return;
+      delete it.fetching;
+      if (info) {
+        if (info.name && BANNED.test(info.name)) {
+          state.items = state.items.filter(function (i) { return i.id !== it.id; });
+          save(); render(); toast('That one’s off the list 🚫'); return;
+        }
+        if (info.name && it.name === placeholder) it.name = info.name;
+        if (info.price != null && num(it.price) == null) { it.price = info.price; it.estimate = !!info.priceGuess || !!(info.currency && info.currency !== 'GBP'); }
+        if (info.image) it.image = info.image;
+      }
+      save(); render();
+      var gotPrice = num(it.price) != null;
+      toast(!info ? 'Added, but ' + (it.shop || 'that shop') + ' wouldn’t share the details. Tap ✏️ to add the price.' :
+        gotPrice ? '“' + (it.name.length > 40 ? it.name.slice(0, 40) + '…' : it.name) + '” added at ' + gbp(it.price, it.estimate) + ' 🎁' :
+        'Added, but couldn’t read the price. Tap ✏️ to add it.');
+    });
+  }
+  document.addEventListener('paste', function (e) {
+    var t = e.target, f = t && t.closest && t.closest('form[data-act="addLink"]'); if (!f) return;
+    setTimeout(function () { if (extractUrl(f.url.value)) addFromLink(f.getAttribute('data-kid'), f.url.value); }, 0);
+  });
+  document.addEventListener('error', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('thumb')) t.remove(); }, true);
+  // "Fill from link" inside the add/edit dialog
+  $('#fillLinkBtn').addEventListener('click', function () {
+    var btn = this, url = extractUrl(form.link.value);
+    if (!url) { toast('Paste a product link first'); return; }
+    form.link.value = url; btn.disabled = true; btn.textContent = '⏳ Getting…';
+    fetchProduct(url).then(function (info) {
+      btn.disabled = false; btn.textContent = '✨ Fill from link';
+      if (!info) { toast('Couldn’t read that page. Fill it in by hand.'); return; }
+      if (info.name) form.name.value = info.name;
+      if (info.price != null) form.price.value = info.price;
+      form.shop.value = shopFromUrl(url);
+      pendingImage = { url: url, image: info.image || '' };
+      toast(info.price != null ? 'Filled in ✓' : 'Got the name, but not the price');
+    });
   });
 
   // ---------- events
@@ -419,6 +634,7 @@
     var act = f.getAttribute('data-act'); if (!act) return;
     e.preventDefault();
     if (act === 'addInterest') { addInterest(getKid(f.getAttribute('data-kid')), f.interest.value); var inp = $('form[data-act="addInterest"] input'); if (inp) inp.focus(); }
+    if (act === 'addLink') { addFromLink(f.getAttribute('data-kid'), f.url.value); }
     if (act === 'search') { ui.searchQ = f.q.value.trim(); if (BANNED.test(ui.searchQ)) { toast('That one’s off the list 🚫'); ui.searchQ = ''; } render(); }
   });
   document.addEventListener('change', function (e) {

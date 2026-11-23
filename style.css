@@ -114,3 +114,10 @@ header,nav,main,footer{position:relative;z-index:1}
   .brand h1{font-size:17px}.logo{font-size:24px}
   .item{grid-template-columns:auto 1fr}.item .side{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
 }
+
+.linkadd{margin-top:4px}
+.linkadd input{min-width:0}
+.item .body{display:flex;gap:10px;align-items:center;min-width:0}
+.item .body>div{min-width:0}
+.thumb{width:46px;height:46px;border-radius:10px;object-fit:contain;background:#fff;border:1px solid var(--line);flex:0 0 auto}
+.fetching{color:var(--accent2);font-weight:600}
