@@ -348,7 +348,7 @@
   }
 
   // ---------- item dialog
-  var dlg = $('#itemDialog'), form = $('#itemForm'), editingId = null, pendingImage = null;
+  var dlg = $('#itemDialog'), form = $('#itemForm'), editingId = null, pendingImage = null, lastLookup = '';
   function openItem(opts) {
     editingId = opts.id || null; pendingImage = null;
     var it = editingId ? state.items.filter(function (i) { return i.id === editingId; })[0] : null;
@@ -356,6 +356,7 @@
     $('#shopList').innerHTML = SHOPS.slice(0, 6).map(function (s) { return '<option value="' + s.name + '">'; }).join('') + EXTRA_HOSTS.map(function (h) { return '<option value="' + esc(h[1]) + '">'; }).join('');
     $('#itemDialogTitle').textContent = it ? 'Edit item' : 'Add item';
     $('#deleteItemBtn').hidden = !it;
+    lastLookup = ''; $('#lookupInfo').textContent = it && it.lookup ? 'Lookup: ' + it.lookup : '';
     var d = it || { kidId: opts.kidId || state.kids[0].id, name: opts.name || '', link: '', price: '', shop: '', notes: '', priority: 2, status: 'Saved' };
     form.kidId.value = d.kidId; form.name.value = d.name; form.link.value = d.link || ''; form.price.value = d.price == null ? '' : d.price;
     form.shop.value = d.shop || ''; form.notes.value = d.notes || ''; form.priority.value = String(d.priority); form.status.value = d.status;
@@ -373,6 +374,7 @@
     var data = { kidId: form.kidId.value, name: name, link: link, price: num(form.price.value), shop: form.shop.value.trim() || shopFromUrl(link),
       notes: form.notes.value.trim(), priority: +form.priority.value, status: form.status.value };
     if (pendingImage && pendingImage.url === link && pendingImage.image) data.image = pendingImage.image;
+    if (lastLookup) data.lookup = lastLookup;
     if (editingId) {
       var it = state.items.filter(function (i) { return i.id === editingId; })[0];
       if (it) { if (num(it.price) !== data.price) it.estimate = false; if (it.link !== data.link && !data.image) delete it.image; Object.assign(it, data); }
@@ -390,10 +392,11 @@
   // ---------- add from a pasted product link
   // The app has no server, so shop pages are read through public CORS relays, tried in turn.
   var RELAYS = [
-    function (u) { return { url: 'https://api.allorigins.win/raw?url=' + enc(u) }; },
-    function (u) { return { url: 'https://api.codetabs.com/v1/proxy/?quest=' + enc(u) }; },
-    function (u) { return { url: 'https://corsproxy.io/?url=' + enc(u) }; },
-    function (u) { return { url: 'https://r.jina.ai/' + u, json: true, opts: { headers: { Accept: 'application/json' } } }; }
+    { id: 'allorigins', make: function (u) { return { url: 'https://api.allorigins.win/raw?url=' + enc(u) }; } },
+    { id: 'reader', make: function (u) { return { url: 'https://r.jina.ai/' + u, kind: 'reader', opts: { headers: { Accept: 'application/json' } } }; } },
+    { id: 'codetabs', make: function (u) { return { url: 'https://api.codetabs.com/v1/proxy/?quest=' + enc(u) }; } },
+    { id: 'corsproxy', make: function (u) { return { url: 'https://corsproxy.io/?url=' + enc(u) }; } },
+    { id: 'microlink', make: function (u) { return { url: 'https://api.microlink.io/?url=' + enc(u), kind: 'microlink' }; } }
   ];
   var BLOCKED = /robot check|access denied|just a moment|attention required|are you a human|captcha|pardon our interruption|security check|verify you are|request blocked|page not found|^\s*(403|404|error)\b/i;
 
@@ -419,18 +422,22 @@
     if (!name) return '';
     var shop = norm(shopFromUrl(url)), host = '';
     try { host = new URL(url).hostname.replace(/^www\./, '').split('.')[0]; } catch (e) {}
+    var shopSq = shop.replace(/[^a-z0-9]/g, ''), hostSq = host.replace(/[^a-z0-9]/g, '');
+    function sq(seg) { return norm(seg).replace(/[^a-z0-9]/g, ''); }
+    function isShop(seg) { var n = sq(seg).replace(/(couk|com|uk|online|store|shop|toys)+$/, ''); return !n || n === shopSq || n === hostSq || n === 'amazon'; }
     function shopish(seg) {
-      var n = norm(seg).replace(/[^a-z0-9 ]/g, '');
-      if (!n) return true;
-      var squashed = n.replace(/ /g, '');
-      return (shop && squashed.indexOf(shop.replace(/[^a-z0-9]/g, '')) >= 0) || (host.length > 2 && squashed.indexOf(host.replace(/[^a-z0-9]/g, '')) >= 0) ||
-        /^(buy|shop|home|official( site| store)?|free delivery.*|toys ?& ?games|pc ?& ?video games|electronics( ?& ?photo)?|books|clothing|home ?& ?kitchen|sports ?& ?outdoors|computers ?& ?accessories)$/.test(n);
+      var n = sq(seg);
+      if (isShop(seg)) return true;
+      if ((shopSq && n.indexOf(shopSq) >= 0 && n.length <= shopSq.length + 8) || (hostSq.length > 2 && n.indexOf(hostSq) >= 0 && n.length <= hostSq.length + 8)) return true;
+      return /^(buy|shop|home|official(site|store)?|freedelivery.*|toysgames|pcvideogames|electronics(photo)?|books|clothing|homekitchen|sportsoutdoors|computersaccessories|diytools|gardenoutdoors|stationeryofficesupplies|babyproducts|beauty|fashion|videogames|lego)$/.test(n);
     }
     var parts = name.split(/\s+[|–—]\s+|\s+-\s+|\s*:\s+/);
-    while (parts.length > 1 && shopish(parts[parts.length - 1])) parts.pop();
-    while (parts.length > 1 && shopish(parts[0])) parts.shift();
+    while (parts.length > 1 && isShop(parts[0])) parts.shift();
+    var longest = parts.reduce(function (m, x) { return x.length > m.length ? x : m; }, '');
+    while (parts.length > 1 && parts[parts.length - 1] !== longest && shopish(parts[parts.length - 1])) parts.pop();
     if (parts.length) { var first = name.indexOf(parts[0]), lastP = parts[parts.length - 1], last = name.lastIndexOf(lastP) + lastP.length; name = name.slice(first, last); }
     name = name.replace(/^buy\s+/i, '').trim();
+    if (isShop(name)) return '';
     return name.length > 140 ? name.slice(0, 137).replace(/\s+\S*$/, '') + '…' : name;
   }
   function nameFromUrl(url) {
@@ -447,6 +454,7 @@
       return cap(best).slice(0, 140);
     } catch (e) { return ''; }
   }
+  function host(u) { try { return new URL(u).hostname; } catch (e) { return ''; } }
   function absUrl(u, base) { try { return safeUrl(new URL(String(u), base).href); } catch (e) { return ''; } }
   function pick(v) { if (Array.isArray(v)) v = v[0]; if (v && typeof v === 'object') v = v.url || v.contentUrl || v['@id'] || ''; return v ? String(v) : ''; }
 
@@ -469,6 +477,25 @@
     return price == null ? null : { price: price, currency: String(o.priceCurrency || (ps && ps.priceCurrency) || '').toUpperCase() };
   }
 
+  // Prices buried in the page's embedded data (Argos, Very, Currys, Amazon variations…).
+  var RAW_PRICE = [
+    /"priceAmount"\s*:\s*"?(\d+(?:\.\d{1,2})?)/,
+    /"(?:price|prices|currentPrice|salePrice|finalPrice|sellPrice|priceInfo|pricing)"\s*:\s*\{[^{}]{0,120}?"(?:now|value|amount|current|currentPrice|price|salePrice|finalPrice)"\s*:\s*"?£?(\d+(?:\.\d{1,2})?)/i,
+    /"(?:price|currentPrice|salePrice|finalPrice|priceNow|nowPrice|sellPrice|displayPrice|formattedPrice|unitPrice)"\s*:\s*"?£?\s?(\d[\d,]*(?:\.\d{1,2})?)"?/i
+  ];
+  function rawPrice(html) {
+    for (var i = 0; i < RAW_PRICE.length; i++) { var m = String(html).match(RAW_PRICE[i]); var p = m && parsePrice(m[1]); if (p != null) return p; }
+    return null;
+  }
+  // First £ amount that follows the product name in the readable text; failing that, the first on the page.
+  function textPrice(text, name) {
+    text = String(text || '').replace(/\s+/g, ' ');
+    var re = /£\s?(\d[\d,]*(?:\.\d{1,2})?)(?!\s*(?:off|a month|per month|\/month|pm\b|credit|gift card|or more|and over|& over|assumed))/i, at = -1;
+    if (name) { var key = name.slice(0, 24).toLowerCase(), low = text.toLowerCase(), from = 0, hit; while ((hit = low.indexOf(key, from)) >= 0) { var m1 = text.slice(hit, hit + 700).match(re); if (m1) return parsePrice(m1[1]); from = hit + key.length; at = hit; } }
+    var m = text.match(re);
+    return m ? parsePrice(m[1]) : null;
+  }
+
   function parseProductHtml(html, url) {
     var doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
     function meta(names) {
@@ -479,7 +506,7 @@
       return '';
     }
     function txt(sel) { var e = doc.querySelector(sel); return e ? (e.getAttribute('content') || e.textContent || '').trim() : ''; }
-    var out = { name: '', price: null, image: '', currency: '' };
+    var out = { name: '', price: null, image: '', currency: '', guess: false };
 
     $$('script[type="application/ld+json"]', doc).some(function (s) {
       var data; try { data = JSON.parse(s.textContent); } catch (e) { return false; }
@@ -495,7 +522,15 @@
 
     // Amazon doesn't publish structured data, so read its page furniture directly.
     if (!out.name) out.name = txt('#productTitle') || txt('#ebooksProductTitle');
-    if (out.price == null) out.price = parsePrice(txt('#corePrice_feature_div .a-offscreen') || txt('#corePriceDisplay_desktop_feature_div .a-offscreen') || txt('#apex_desktop .a-offscreen') || txt('#priceblock_ourprice') || txt('#price_inside_buybox'));
+    if (out.price == null && /amazon\.|amzn\.|a\.co$/.test(host(url))) {
+      var whole = txt('.priceToPay .a-price-whole') || txt('#corePrice_feature_div .a-price-whole') || txt('#corePriceDisplay_desktop_feature_div .a-price-whole');
+      var frac = txt('.priceToPay .a-price-fraction') || txt('#corePrice_feature_div .a-price-fraction') || txt('#corePriceDisplay_desktop_feature_div .a-price-fraction');
+      var hidden = doc.querySelector('#twister-plus-price-data-price,#attach-base-product-price,#priceValue');
+      out.price = parsePrice(txt('.priceToPay .a-offscreen') || txt('.apexPriceToPay .a-offscreen') || txt('#corePrice_feature_div .a-offscreen') || txt('#corePriceDisplay_desktop_feature_div .a-offscreen') ||
+        txt('#apex_desktop .a-offscreen') || txt('#tp_price_block_total_price_ww .a-offscreen') || (hidden && hidden.getAttribute('value')) ||
+        (whole ? whole.replace(/[^\d]/g, '') + '.' + (frac.replace(/[^\d]/g, '') || '00') : '') ||
+        txt('#priceblock_ourprice') || txt('#priceblock_dealprice') || txt('#price_inside_buybox') || txt('#newBuyBoxPrice') || txt('#kindle-price') || txt('#price') || txt('#buybox .a-price .a-offscreen') || txt('#centerCol .a-price .a-offscreen'));
+    }
     if (!out.image) { var li = doc.querySelector('#landingImage,#imgBlkFront'); if (li) out.image = li.getAttribute('data-old-hires') || li.getAttribute('src') || ''; }
 
     if (!out.name) out.name = meta(['og:title', 'twitter:title']) || txt('h1[itemprop="name"],[itemprop="name"]') || txt('h1') || title;
@@ -506,6 +541,11 @@
     if (!out.image) out.image = meta(['og:image', 'og:image:secure_url', 'twitter:image', 'twitter:image:src']);
 
     out.name = cleanName(out.name, url);
+    if (out.price == null) { out.price = rawPrice(html); out.guess = out.price != null; }
+    if (out.price == null && doc.body) {
+      $$('script,style,noscript,template,svg', doc.body).forEach(function (e) { e.remove(); });
+      out.price = textPrice(doc.body.textContent, out.name); out.guess = out.price != null;
+    }
     out.image = out.image && !/^data:/i.test(out.image) ? absUrl(out.image, url) : '';
     if (!out.name || BLOCKED.test(out.name)) return null;
     return out;
@@ -513,33 +553,37 @@
   function parseReaderJson(j, url) {
     var d = j && j.data; if (!d || !d.title) return null;
     var name = cleanName(d.title, url); if (!name || BLOCKED.test(name)) return null;
-    var m = String(d.content || '').match(/£\s?(\d[\d,]*(?:\.\d{1,2})?)/);
-    return { name: name, price: m ? parsePrice(m[1]) : null, image: '', currency: 'GBP', guess: true };
+    var content = String(d.content || '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1');
+    if (/enter the characters you see below|verify you are human|unusual traffic/i.test(content.slice(0, 1500))) return null;
+    var price = textPrice(content, name);
+    return { name: name, price: price, image: '', currency: 'GBP', guess: price != null };
+  }
+  function parseMicrolink(j, url) {
+    var d = j && j.status === 'success' && j.data; if (!d || !d.title) return null;
+    var name = cleanName(d.title, url); if (!name || BLOCKED.test(name)) return null;
+    return { name: name, price: null, image: d.image && d.image.url ? absUrl(d.image.url, url) : '', currency: '', guess: false };
   }
 
   function fetchVia(relay, url, ms) {
-    var r = relay(url), opts = r.opts || {}, ctl = window.AbortController ? new AbortController() : null, timer;
+    var r = relay.make(url), opts = r.opts || {}, ctl = window.AbortController ? new AbortController() : null, timer;
     if (ctl) { opts.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, ms); }
     return fetch(r.url, opts).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      return r.json ? res.json().then(function (j) { return parseReaderJson(j, url); }) : res.text().then(function (h) { return parseProductHtml(h, url); });
-    }).then(function (v) { clearTimeout(timer); return v; }, function () { clearTimeout(timer); return null; });
+      return r.kind ? res.json().then(function (j) { return (r.kind === 'reader' ? parseReaderJson : parseMicrolink)(j, url); }) : res.text().then(function (h) { return parseProductHtml(h, url); });
+    }).then(function (v) { clearTimeout(timer); return { id: relay.id, info: v, note: v ? (v.price != null ? (v.guess ? 'name + likely price' : 'name + price') : 'name only') : 'no product found' }; },
+      function (e) { clearTimeout(timer); return { id: relay.id, info: null, note: e && e.name === 'AbortError' ? 'timed out' : (e && e.message) || 'failed' }; });
   }
-  // Resolves with { name, price, image, ... } or null. Stops as soon as a relay gives both a name and a price.
+  // Asks every relay at once and merges the answers. Resolves with { name, price, image, priceGuess, log } or null.
   function fetchProduct(url) {
-    var best = null, i = 0;
-    function next() {
-      if (i >= RELAYS.length || !window.fetch) return Promise.resolve(best);
-      return fetchVia(RELAYS[i++], url, 10000).then(function (info) {
-        if (info) {
-          if (!best) best = info;
-          else { if (best.price == null && info.price != null) { best.price = info.price; best.priceGuess = !!info.guess; best.currency = info.currency; } if (!best.image && info.image) best.image = info.image; }
-          if (info === best && info.guess && info.price != null) best.priceGuess = true;
-        }
-        return best && best.price != null ? best : next();
-      });
-    }
-    return next();
+    if (!window.fetch) return Promise.resolve(null);
+    return Promise.all(RELAYS.map(function (r) { return fetchVia(r, url, 14000); })).then(function (res) {
+      var got = res.filter(function (r) { return r.info; }).map(function (r) { return r.info; });
+      var log = res.map(function (r) { return r.id + ': ' + r.note; }).join(' · ');
+      if (!got.length) return { failed: true, log: log };
+      var exact = got.filter(function (g) { return g.price != null && !g.guess; })[0], guess = got.filter(function (g) { return g.price != null; })[0];
+      var withImg = got.filter(function (g) { return g.image; })[0], p = exact || guess;
+      return { name: got[0].name, price: p ? p.price : null, priceGuess: !exact && !!guess, currency: p ? p.currency : '', image: withImg ? withImg.image : '', log: log };
+    });
   }
 
   function addFromLink(kidId, raw) {
@@ -559,7 +603,8 @@
 
     fetchProduct(url).then(function (info) {
       var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) return;
-      delete it.fetching;
+      delete it.fetching; if (info && info.log) it.lookup = info.log;
+      if (info && info.failed) info = null;
       if (info) {
         if (info.name && BANNED.test(info.name)) {
           state.items = state.items.filter(function (i) { return i.id !== it.id; });
@@ -588,7 +633,9 @@
     form.link.value = url; btn.disabled = true; btn.textContent = '⏳ Getting…';
     fetchProduct(url).then(function (info) {
       btn.disabled = false; btn.textContent = '✨ Fill from link';
-      if (!info) { toast('Couldn’t read that page. Fill it in by hand.'); return; }
+      lastLookup = info && info.log || '';
+      $('#lookupInfo').textContent = lastLookup ? 'Lookup: ' + lastLookup : '';
+      if (!info || info.failed) { toast('Couldn’t read that page. Fill it in by hand.'); return; }
       if (info.name) form.name.value = info.name;
       if (info.price != null) form.price.value = info.price;
       form.shop.value = shopFromUrl(url);
@@ -677,9 +724,10 @@
 
   // ---------- theme, countdown, snow
   function applyTheme() {
-    var t = state.settings.theme || (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    if (state.settings.themeV !== 2) { state.settings.theme = 'dark'; state.settings.themeV = 2; save(); }
+    var t = state.settings.theme || 'dark';
     document.documentElement.setAttribute('data-theme', t);
-    $('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#f7f4ee' : '#0f1a17');
+    $('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#f7f4ee' : '#0b0c0e');
   }
   $('#themeBtn').addEventListener('click', function () {
     var cur = document.documentElement.getAttribute('data-theme');

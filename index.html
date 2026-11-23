@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Christmas Gift Tracker · Joshua, Jude &amp; Joey</title>
 <meta name="description" content="Track Christmas presents for Joshua, Jude and Joey: ideas, saved items, budgets and what's bought.">
-<meta name="theme-color" content="#0f1a17">
+<meta name="theme-color" content="#0b0c0e">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎁</text></svg>">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <header class="top">
@@ -48,6 +48,7 @@
       <input name="link" type="url" inputmode="url" placeholder="https://…">
     </label>
     <button type="button" class="btn sm" id="fillLinkBtn">✨ Fill from link</button>
+    <p class="muted small" id="lookupInfo" style="margin:6px 0 0;word-break:break-word"></p>
     <div class="row2">
       <label>Price (£)
         <input name="price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
@@ -85,7 +86,7 @@
 
 <div id="toast" class="toast" role="status"></div>
 
-<script src="catalogue.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="catalogue.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
