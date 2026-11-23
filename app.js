@@ -319,6 +319,29 @@
       '</tbody><tfoot><tr><td>Total</td><td>' + (T.hasBud ? gbp(T.bud) : '—') + '</td><td>' + gbp(T.b) + '</td><td>' + gbp(T.p) + '</td><td class="' + (T.hasBud && T.left < 0 ? 'over' : '') + '">' + (T.hasBud ? gbp(T.left) : '—') + '</td></tr></tfoot></table></div>' +
       '<p class="muted small">Left after plan only counts kids with a budget set. Everything = ' + gbp(T.p + T.b) + ' (bought ' + gbp(T.b) + ' + still to buy ' + gbp(T.p) + '). Items without a price count as £0; “~” prices are estimates. Set budgets on each kid’s profile.</p></section>';
 
+    // fairness: presents and spend side by side
+    var fair = state.kids.map(function (k) {
+      var its = kidItems(k), b = bought(its);
+      return { k: k, n: its.length, nb: b.length, total: sum(its), spent: sum(b), unpriced: its.filter(function (i) { return num(i.price) == null; }).length };
+    });
+    var maxN = Math.max.apply(null, fair.map(function (f) { return f.n; }).concat(1)), maxT = Math.max.apply(null, fair.map(function (f) { return f.total; }).concat(1));
+    var topT = fair.slice().sort(function (a, b) { return b.total - a.total; })[0], topN = fair.slice().sort(function (a, b) { return b.n - a.n; })[0];
+    var even = fair.every(function (f) { return topT.total - f.total < 1 && f.n === topN.n; });
+    function fbar(done, all, max, col) {
+      return '<div class="fbar"><span style="width:' + (done / max * 100) + '%;background:' + col + '"></span><span style="width:' + ((all - done) / max * 100) + '%;background:' + col + ';opacity:.35"></span></div>';
+    }
+    h += '<section class="card"><h2>⚖️ Fairness</h2><p class="muted small" style="margin:0 0 4px">Everything on each list, bought or not. Solid = bought, faded = still to buy.</p>' +
+      fair.map(function (f) {
+        var col = kidColour(f.k), gapT = topT.total - f.total, gapN = topN.n - f.n, bits = [];
+        if (gapT >= 1) bits.push(gbp(Math.round(gapT)) + ' less than ' + esc(topT.k.name));
+        if (gapN > 0) bits.push(gapN + ' fewer present' + (gapN === 1 ? '' : 's') + ' than ' + esc(topN.k.name));
+        return '<div class="fair"><div class="fair-h"><b style="color:' + col + '">' + esc(f.k.name) + '</b><span class="muted small">' + (bits.length ? bits.join(' · ') : (even ? 'level' : 'most so far')) + '</span></div>' +
+          '<div class="fair-r"><span class="k">Presents</span>' + fbar(f.nb, f.n, maxN, col) + '<span class="v">' + f.n + '</span></div>' +
+          '<div class="fair-r"><span class="k">Spend</span>' + fbar(f.spent, f.total, maxT, col) + '<span class="v">' + gbp(Math.round(f.total)) + '</span></div>' +
+          (f.unpriced ? '<div class="muted small">' + f.unpriced + ' item' + (f.unpriced === 1 ? ' has' : 's have') + ' no price yet, so the spend is understated.</div>' : '') + '</div>';
+      }).join('') +
+      (even && topN.n ? '<p class="small" style="margin:8px 0 0;color:var(--green)">All level 🎉</p>' : '') + '</section>';
+
     var toBuy = state.items.filter(function (i) { return i.status === 'Idea' || i.status === 'Saved'; })
       .sort(function (a, b) { return a.priority - b.priority || (a.status === 'Saved' ? -1 : 0) - (b.status === 'Saved' ? -1 : 0) || (num(a.price) || 0) - (num(b.price) || 0); });
     var cash = num(state.settings.cash), fits = {}, spend = 0;
@@ -391,6 +414,8 @@
 
   // ---------- add from a pasted product link
   // The app has no server, so shop pages are read through public CORS relays, tried in turn.
+  // Your own Cloudflare Worker (see worker/worker.js). Leave empty to use only the public relays.
+  var FETCHER_URL = '';
   var RELAYS = [
     { id: 'allorigins', make: function (u) { return { url: 'https://api.allorigins.win/raw?url=' + enc(u) }; } },
     { id: 'reader', make: function (u) { return { url: 'https://r.jina.ai/' + u, kind: 'reader', opts: { headers: { Accept: 'application/json' } } }; } },
@@ -398,6 +423,7 @@
     { id: 'corsproxy', make: function (u) { return { url: 'https://corsproxy.io/?url=' + enc(u) }; } },
     { id: 'microlink', make: function (u) { return { url: 'https://api.microlink.io/?url=' + enc(u), kind: 'microlink' }; } }
   ];
+  if (FETCHER_URL) RELAYS.unshift({ id: 'worker', make: function (u) { return { url: FETCHER_URL + (FETCHER_URL.indexOf('?') < 0 ? '?' : '&') + 'url=' + enc(u) }; } });
   var BLOCKED = /robot check|access denied|just a moment|attention required|are you a human|captcha|pardon our interruption|security check|verify you are|request blocked|page not found|^\s*(403|404|error)\b/i;
 
   function extractUrl(text) {
@@ -727,7 +753,7 @@
     if (state.settings.themeV !== 2) { state.settings.theme = 'dark'; state.settings.themeV = 2; save(); }
     var t = state.settings.theme || 'dark';
     document.documentElement.setAttribute('data-theme', t);
-    $('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#f7f4ee' : '#0b0c0e');
+    $('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#f7f4ee' : '#0e0f11');
   }
   $('#themeBtn').addEventListener('click', function () {
     var cur = document.documentElement.getAttribute('data-theme');

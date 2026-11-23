@@ -11,6 +11,8 @@ A small, phone-friendly web app for planning and tracking Christmas presents for
 - **Paste a link, done:** paste a product link from any shop into a kid's gift list and the name, price, shop and picture are filled in and the item goes straight into *To buy*. The page is read through public CORS relays (the app has no server), so a shop that blocks them still gets added with whatever could be worked out from the link, ready for you to add the price.
 - **Save items:** name, link, price (£), shop (auto-detected from the link), notes, priority (🔥 must-have / ⭐ really want / 🙂 nice to have) and status (Idea → Saved → Bought → Wrapped; tap the pill to move it on).
 - **Money tab:** budget, bought, still to buy and money left for each kid and in total. There's a **"Buy when I have money"** list sorted by priority, and an **"I have £X now"** box that highlights what you can afford.
+- **Fairness view** on the Money tab: presents and spend per kid, side by side.
+- **Optional own fetcher:** `worker/worker.js` is a small Cloudflare Worker that fetches shop pages more reliably than the public relays. Deploy it, then set `FETCHER_URL` in `app.js`.
 - **Christmas countdown**, with dark and light themes.
 - **Backups:** everything is saved in this browser (localStorage). Use **Export backup** / **Import backup** (JSON) to keep a copy or move it to another device.
 

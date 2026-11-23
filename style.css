@@ -122,19 +122,21 @@ header,nav,main,footer{position:relative;z-index:1}
 .thumb{width:46px;height:46px;border-radius:10px;object-fit:contain;background:#fff;border:1px solid var(--line);flex:0 0 auto}
 .fetching{color:var(--accent2);font-weight:600}
 
-/* ---- dark carbon look */
-:root:not([data-theme="light"]) body{background-color:#0b0c0e;
-  background-image:linear-gradient(27deg,#121316 5px,transparent 5px),linear-gradient(207deg,#121316 5px,transparent 5px),
-    linear-gradient(27deg,#191b1f 5px,transparent 5px),linear-gradient(207deg,#191b1f 5px,transparent 5px),
-    linear-gradient(90deg,#15171a 10px,transparent 10px),
-    linear-gradient(#17191c 25%,#121316 25%,#121316 50%,transparent 50%,transparent 75%,#1c1e22 75%,#1c1e22);
-  background-size:20px 20px;background-position:0 5px,10px 0,0 10px,10px 5px,0 0,0 0;background-attachment:fixed}
-:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) dialog{background:linear-gradient(180deg,#1a1c21,#131518);border-color:#2e3239;
-  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
-:root:not([data-theme="light"]) .stat,:root:not([data-theme="light"]) .item,:root:not([data-theme="light"]) .idea{background:linear-gradient(180deg,#20232a,#1a1c21);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-:root:not([data-theme="light"]) .tabs{background:rgba(11,12,14,.86);border-bottom:1px solid #1f2227}
-:root:not([data-theme="light"]) .tab,:root:not([data-theme="light"]) .icon-btn{background:linear-gradient(180deg,#22252b,#17191d)}
-:root:not([data-theme="light"]) .tab[aria-selected="true"]{background:linear-gradient(180deg,#f4f5f7,#c9cdd4);color:#0b0c0e;border-color:#d7dae0}
-:root:not([data-theme="light"]) .btn:not(.primary):not(.green):not(.ghost){background:linear-gradient(180deg,#262a31,#1b1e23)}
-:root:not([data-theme="light"]) .brand h1{background:linear-gradient(180deg,#fff,#a9afb9);-webkit-background-clip:text;background-clip:text;color:transparent}
-:root:not([data-theme="light"]) input,:root:not([data-theme="light"]) select,:root:not([data-theme="light"]) textarea{background:#0d0e11;border-color:#2e3239}
+/* ---- matte dark look: flat charcoal, no texture or gloss */
+:root:not([data-theme="light"]) body{background:#0e0f11}
+:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) dialog{background:#17191c;border-color:#26292e;box-shadow:none}
+:root:not([data-theme="light"]) .stat,:root:not([data-theme="light"]) .item,:root:not([data-theme="light"]) .idea{background:#1e2125}
+:root:not([data-theme="light"]) .tabs{background:rgba(14,15,17,.94);border-bottom:1px solid #1f2227}
+:root:not([data-theme="light"]) .tab,:root:not([data-theme="light"]) .icon-btn{background:#1a1c20}
+:root:not([data-theme="light"]) .tab[aria-selected="true"]{background:#e6e8eb;color:#0e0f11;border-color:#e6e8eb}
+:root:not([data-theme="light"]) .btn:not(.primary):not(.green):not(.ghost){background:#22252a}
+:root:not([data-theme="light"]) .countdown{background:var(--accent);box-shadow:none}
+:root:not([data-theme="light"]) input,:root:not([data-theme="light"]) select,:root:not([data-theme="light"]) textarea{background:#101114;border-color:#2a2d33}
+
+.fair{padding:10px 0;border-top:1px solid var(--line)}
+.fair:first-of-type{border-top:0}
+.fair-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.fair-r{display:grid;grid-template-columns:64px 1fr 56px;gap:8px;align-items:center;margin:4px 0}
+.fair-r .k{font-size:12px;color:var(--muted)} .fair-r .v{font-weight:700;text-align:right}
+.fbar{height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;display:flex}
+.fbar span{display:block;height:100%}
