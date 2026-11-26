@@ -57,7 +57,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .tag{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
-.tag button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:9px 10px;margin:-9px -10px -9px -6px}
+.tag button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:5px 10px;margin:-5px -10px -5px -6px}
 .tag.suggest{cursor:pointer;opacity:.8;border-style:dashed}
 .tag.suggest:hover{opacity:1}
 details summary{cursor:pointer;font-weight:600;list-style:none}
