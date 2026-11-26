@@ -344,13 +344,33 @@
 
     var toBuy = state.items.filter(function (i) { return i.status === 'Idea' || i.status === 'Saved'; })
       .sort(function (a, b) { return a.priority - b.priority || (a.status === 'Saved' ? -1 : 0) - (b.status === 'Saved' ? -1 : 0) || (num(a.price) || 0) - (num(b.price) || 0); });
+    // Shop chips: narrow the list to one shop, for when you're in it or ordering from it.
+    var groups = {}, order = [];
+    toBuy.forEach(function (i) {
+      var label = String(i.shop || '').trim(), key = 's:' + norm(label);
+      if (!groups[key]) { groups[key] = { key: key, label: label, n: 0 }; order.push(groups[key]); }
+      groups[key].n++;
+    });
+    order.sort(function (a, b) { return (a.label ? 0 : 1) - (b.label ? 0 : 1) || b.n - a.n || a.label.localeCompare(b.label); });
+    if (order.length < 2 || !groups[ui.buyShop]) ui.buyShop = '';
+    var nAll = toBuy.length, picked = ui.buyShop ? groups[ui.buyShop] : null, shopBar = '';
+    if (order.length > 1) {
+      shopBar = '<div class="filters"><button class="chip ' + (picked ? '' : 'on') + '" data-act="buyShop" data-v="">All shops (' + nAll + ')</button>' + order.map(function (g) {
+        return '<button class="chip ' + (picked === g ? 'on' : '') + '" data-act="buyShop" data-v="' + esc(g.key) + '">' + esc(g.label || 'No shop') + ' (' + g.n + ')</button>'; }).join('') + '</div>';
+    }
+    if (picked) {
+      toBuy = toBuy.filter(function (i) { return 's:' + norm(String(i.shop || '').trim()) === picked.key; });
+      var noPrice = toBuy.filter(function (i) { return num(i.price) == null; }).length;
+      shopBar += '<p class="small" style="margin:8px 0 0">' + toBuy.length + ' item' + (toBuy.length === 1 ? '' : 's') + (picked.label ? ' from <b>' + esc(picked.label) + '</b>' : ' with no shop yet') + ': <b>' + gbp(sum(toBuy)) + '</b>' +
+        (noPrice ? ' <span class="muted">(' + noPrice + ' with no price yet)</span>' : '') + '</p>';
+    }
     var cash = num(state.settings.cash), fits = {}, spend = 0;
     if (cash != null) toBuy.forEach(function (i) { var p = num(i.price); if (p != null && spend + p <= cash) { spend += p; fits[i.id] = 1; } });
     var nFit = Object.keys(fits).length;
     h += '<section class="card"><h2>🛒 Buy when I have money</h2>' +
       '<div class="money-input"><label style="margin:0">I have £ now</label><input id="cashInput" type="number" inputmode="decimal" min="0" step="1" placeholder="e.g. 120" value="' + esc(state.settings.cash || '') + '">' +
       (cash != null ? '<span class="small"><b>' + nFit + '</b> item' + (nFit === 1 ? '' : 's') + ' fit (' + gbp(spend) + '), ' + gbp(cash - spend) + ' spare</span>' : '<span class="muted small">Highlights what you can afford, top priority first.</span>') + '</div>' +
-      '<p class="muted small">Sorted by priority (🔥 must-have → 🙂 nice to have), then cheapest first.</p>' +
+      '<p class="muted small">Sorted by priority (🔥 must-have → 🙂 nice to have), then cheapest first.</p>' + shopBar +
       '<div class="items">' + (toBuy.length ? toBuy.map(function (i) { return itemRow(i, true).replace('class="item"', 'class="item' + (fits[i.id] ? ' fits' : '') + '"'); }).join('') : '<div class="empty">Nothing waiting to be bought 🎉</div>') + '</div></section>';
     return h;
   }
@@ -694,6 +714,7 @@
         state.items.push({ id: uid(), kidId: kidId, name: c.name, link: '', price: c.price, estimate: true, shop: '', notes: '', priority: 2, status: 'Idea', searchQ: c.q, created: Date.now() });
         save(); render(); toast('Saved “' + c.name + '” for ' + kid.name + '. Tap ✏️ to add the real link & price.'); break;
       case 'addFromSearch': openItem({ kidId: kidId, name: ui.searchQ || '' }); break;
+      case 'buyShop': ui.buyShop = el.getAttribute('data-v') || ''; render(); break;
     }
   });
   function addInterest(kid, v) {
