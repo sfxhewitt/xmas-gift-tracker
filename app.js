@@ -75,7 +75,24 @@
     for (var j = 0; j < EXTRA_HOSTS.length; j++) if (EXTRA_HOSTS[j][0].test(h)) return EXTRA_HOSTS[j][1];
     return h.replace(/^www\./, '');
   }
-  function toast(msg) { var t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 2200); }
+  // Pass an undo function to add an "Undo" button to the message (it then stays up longer).
+  function toast(msg, undo) {
+    var t = $('#toast'), b = null; t.textContent = msg;
+    if (undo) {
+      b = document.createElement('button'); b.type = 'button'; b.className = 'toast-undo'; b.textContent = 'Undo';
+      b.addEventListener('click', function () { clearTimeout(toast._t); t.classList.remove('show'); undo(); });
+      t.appendChild(b);
+    }
+    t.classList.toggle('has-undo', !!undo);
+    t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); if (b) b.disabled = true; }, undo ? 6000 : 2200);
+  }
+  // Undo for a status tap: puts the item back to the status it had, if it is still on the list.
+  function undoStatus(id, was) {
+    return function () {
+      var it = state.items.filter(function (i) { return i.id === id; })[0]; if (!it) return;
+      it.status = was; save(); render(); toast('Back to ' + was);
+    };
+  }
 
   // ---------- state
   function defaultState() {
@@ -408,8 +425,14 @@
   $('#cancelItemBtn').addEventListener('click', closeItem);
   $('#deleteItemBtn').addEventListener('click', function () {
     if (!editingId || !confirm('Remove this item from the list?')) return;
+    var gone = state.items.filter(function (i) { return i.id === editingId; })[0], at = state.items.indexOf(gone);
     state.items = state.items.filter(function (i) { return i.id !== editingId; });
-    save(); closeItem(); render(); toast('Removed');
+    save(); closeItem(); render();
+    toast('Removed', gone && function () {
+      if (state.items.some(function (i) { return i.id === gone.id; })) return;
+      if (!getKid(gone.kidId)) { toast('Can’t put that back'); return; }
+      state.items.splice(Math.min(at, state.items.length), 0, gone); save(); render(); toast('Put back ✓');
+    });
   });
 
   // ---------- add from a pasted product link
@@ -628,7 +651,7 @@
     save(); render(); toast('Added to ' + kid.name + '’s To buy list. Getting the details…');
 
     fetchProduct(url).then(function (info) {
-      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) return;
+      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) { delete item.fetching; return; } // deleted meanwhile; clear the flag in case Undo puts it back
       delete it.fetching; if (info && info.log) it.lookup = info.log;
       if (info && info.failed) info = null;
       if (info) {
@@ -680,8 +703,8 @@
     switch (act) {
       case 'addItem': openItem({ kidId: kidId }); break;
       case 'edit': openItem({ id: id }); break;
-      case 'cycle': item.status = STATUSES[(STATUSES.indexOf(item.status) + 1) % STATUSES.length]; save(); render(); toast(item.name + ' → ' + item.status); break;
-      case 'markBought': item.status = 'Bought'; save(); render(); toast('Marked bought ✓'); break;
+      case 'cycle': var was = item.status; item.status = STATUSES[(STATUSES.indexOf(was) + 1) % STATUSES.length]; save(); render(); toast(item.name + ' → ' + item.status, undoStatus(item.id, was)); break;
+      case 'markBought': var wasB = item.status; item.status = 'Bought'; save(); render(); toast('Marked bought ✓', undoStatus(item.id, wasB)); break;
       case 'filter': ui.filter[kidId] = el.getAttribute('data-v'); render(); break;
       case 'rmInterest': kid.interests.splice(+el.getAttribute('data-i'), 1); save(); render(); break;
       case 'quickInterest': addInterest(kid, el.getAttribute('data-v')); break;
