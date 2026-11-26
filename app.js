@@ -75,7 +75,24 @@
     for (var j = 0; j < EXTRA_HOSTS.length; j++) if (EXTRA_HOSTS[j][0].test(h)) return EXTRA_HOSTS[j][1];
     return h.replace(/^www\./, '');
   }
-  function toast(msg) { var t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 2200); }
+  // Pass an undo function to add an "Undo" button to the message (it then stays up longer).
+  function toast(msg, undo) {
+    var t = $('#toast'), b = null; t.textContent = msg;
+    if (undo) {
+      b = document.createElement('button'); b.type = 'button'; b.className = 'toast-undo'; b.textContent = 'Undo';
+      b.addEventListener('click', function () { clearTimeout(toast._t); t.classList.remove('show'); undo(); });
+      t.appendChild(b);
+    }
+    t.classList.toggle('has-undo', !!undo);
+    t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); if (b) b.disabled = true; }, undo ? 6000 : 2200);
+  }
+  // Undo for a status tap: puts the item back to the status it had, if it is still on the list.
+  function undoStatus(id, was) {
+    return function () {
+      var it = state.items.filter(function (i) { return i.id === id; })[0]; if (!it) return;
+      it.status = was; save(); render(); toast('Back to ' + was);
+    };
+  }
 
   // ---------- state
   function defaultState() {
@@ -344,13 +361,33 @@
 
     var toBuy = state.items.filter(function (i) { return i.status === 'Idea' || i.status === 'Saved'; })
       .sort(function (a, b) { return a.priority - b.priority || (a.status === 'Saved' ? -1 : 0) - (b.status === 'Saved' ? -1 : 0) || (num(a.price) || 0) - (num(b.price) || 0); });
+    // Shop chips: narrow the list to one shop, for when you're in it or ordering from it.
+    var groups = {}, order = [];
+    toBuy.forEach(function (i) {
+      var label = String(i.shop || '').trim(), key = 's:' + norm(label);
+      if (!groups[key]) { groups[key] = { key: key, label: label, n: 0 }; order.push(groups[key]); }
+      groups[key].n++;
+    });
+    order.sort(function (a, b) { return (a.label ? 0 : 1) - (b.label ? 0 : 1) || b.n - a.n || a.label.localeCompare(b.label); });
+    if (order.length < 2 || !groups[ui.buyShop]) ui.buyShop = '';
+    var nAll = toBuy.length, picked = ui.buyShop ? groups[ui.buyShop] : null, shopBar = '';
+    if (order.length > 1) {
+      shopBar = '<div class="filters"><button class="chip ' + (picked ? '' : 'on') + '" data-act="buyShop" data-v="">All shops (' + nAll + ')</button>' + order.map(function (g) {
+        return '<button class="chip ' + (picked === g ? 'on' : '') + '" data-act="buyShop" data-v="' + esc(g.key) + '">' + esc(g.label || 'No shop') + ' (' + g.n + ')</button>'; }).join('') + '</div>';
+    }
+    if (picked) {
+      toBuy = toBuy.filter(function (i) { return 's:' + norm(String(i.shop || '').trim()) === picked.key; });
+      var noPrice = toBuy.filter(function (i) { return num(i.price) == null; }).length;
+      shopBar += '<p class="small" style="margin:8px 0 0">' + toBuy.length + ' item' + (toBuy.length === 1 ? '' : 's') + (picked.label ? ' from <b>' + esc(picked.label) + '</b>' : ' with no shop yet') + ': <b>' + gbp(sum(toBuy)) + '</b>' +
+        (noPrice ? ' <span class="muted">(' + noPrice + ' with no price yet)</span>' : '') + '</p>';
+    }
     var cash = num(state.settings.cash), fits = {}, spend = 0;
     if (cash != null) toBuy.forEach(function (i) { var p = num(i.price); if (p != null && spend + p <= cash) { spend += p; fits[i.id] = 1; } });
     var nFit = Object.keys(fits).length;
     h += '<section class="card"><h2>🛒 Buy when I have money</h2>' +
       '<div class="money-input"><label style="margin:0">I have £ now</label><input id="cashInput" type="number" inputmode="decimal" min="0" step="1" placeholder="e.g. 120" value="' + esc(state.settings.cash || '') + '">' +
       (cash != null ? '<span class="small"><b>' + nFit + '</b> item' + (nFit === 1 ? '' : 's') + ' fit (' + gbp(spend) + '), ' + gbp(cash - spend) + ' spare</span>' : '<span class="muted small">Highlights what you can afford, top priority first.</span>') + '</div>' +
-      '<p class="muted small">Sorted by priority (🔥 must-have → 🙂 nice to have), then cheapest first.</p>' +
+      '<p class="muted small">Sorted by priority (🔥 must-have → 🙂 nice to have), then cheapest first.</p>' + shopBar +
       '<div class="items">' + (toBuy.length ? toBuy.map(function (i) { return itemRow(i, true).replace('class="item"', 'class="item' + (fits[i.id] ? ' fits' : '') + '"'); }).join('') : '<div class="empty">Nothing waiting to be bought 🎉</div>') + '</div></section>';
     return h;
   }
@@ -408,8 +445,14 @@
   $('#cancelItemBtn').addEventListener('click', closeItem);
   $('#deleteItemBtn').addEventListener('click', function () {
     if (!editingId || !confirm('Remove this item from the list?')) return;
+    var gone = state.items.filter(function (i) { return i.id === editingId; })[0], at = state.items.indexOf(gone);
     state.items = state.items.filter(function (i) { return i.id !== editingId; });
-    save(); closeItem(); render(); toast('Removed');
+    save(); closeItem(); render();
+    toast('Removed', gone && function () {
+      if (state.items.some(function (i) { return i.id === gone.id; })) return;
+      if (!getKid(gone.kidId)) { toast('Can’t put that back'); return; }
+      state.items.splice(Math.min(at, state.items.length), 0, gone); save(); render(); toast('Put back ✓');
+    });
   });
 
   // ---------- add from a pasted product link
@@ -628,7 +671,7 @@
     save(); render(); toast('Added to ' + kid.name + '’s To buy list. Getting the details…');
 
     fetchProduct(url).then(function (info) {
-      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) return;
+      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) { delete item.fetching; return; } // deleted meanwhile; clear the flag in case Undo puts it back
       delete it.fetching; if (info && info.log) it.lookup = info.log;
       if (info && info.failed) info = null;
       if (info) {
@@ -680,8 +723,8 @@
     switch (act) {
       case 'addItem': openItem({ kidId: kidId }); break;
       case 'edit': openItem({ id: id }); break;
-      case 'cycle': item.status = STATUSES[(STATUSES.indexOf(item.status) + 1) % STATUSES.length]; save(); render(); toast(item.name + ' → ' + item.status); break;
-      case 'markBought': item.status = 'Bought'; save(); render(); toast('Marked bought ✓'); break;
+      case 'cycle': var was = item.status; item.status = STATUSES[(STATUSES.indexOf(was) + 1) % STATUSES.length]; save(); render(); toast(item.name + ' → ' + item.status, undoStatus(item.id, was)); break;
+      case 'markBought': var wasB = item.status; item.status = 'Bought'; save(); render(); toast('Marked bought ✓', undoStatus(item.id, wasB)); break;
       case 'filter': ui.filter[kidId] = el.getAttribute('data-v'); render(); break;
       case 'rmInterest': kid.interests.splice(+el.getAttribute('data-i'), 1); save(); render(); break;
       case 'quickInterest': addInterest(kid, el.getAttribute('data-v')); break;
@@ -694,6 +737,7 @@
         state.items.push({ id: uid(), kidId: kidId, name: c.name, link: '', price: c.price, estimate: true, shop: '', notes: '', priority: 2, status: 'Idea', searchQ: c.q, created: Date.now() });
         save(); render(); toast('Saved “' + c.name + '” for ' + kid.name + '. Tap ✏️ to add the real link & price.'); break;
       case 'addFromSearch': openItem({ kidId: kidId, name: ui.searchQ || '' }); break;
+      case 'buyShop': ui.buyShop = el.getAttribute('data-v') || ''; render(); break;
     }
   });
   function addInterest(kid, v) {
