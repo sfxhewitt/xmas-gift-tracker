@@ -57,7 +57,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .tag{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
-.tag button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:0}
+.tag button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:9px 10px;margin:-9px -10px -9px -6px}
 .tag.suggest{cursor:pointer;opacity:.8;border-style:dashed}
 .tag.suggest:hover{opacity:1}
 details summary{cursor:pointer;font-weight:600;list-style:none}
@@ -80,7 +80,7 @@ details[open] summary::after{content:" ▴"}
 .item .nm{font-weight:650;word-break:break-word}
 .item .meta{font-size:12.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
 .item .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.status{font-size:12px;border-radius:999px;padding:3px 9px;font-weight:700;border:0;cursor:pointer;font-family:inherit}
+.status{font-size:13px;border-radius:999px;padding:8px 14px;min-height:35px;font-weight:700;border:0;cursor:pointer;font-family:inherit;touch-action:manipulation}
 .st-Idea{background:#5a606a;color:#fff}.st-Saved{background:var(--blue);color:#06233a}.st-Bought{background:var(--green);color:#062a19}.st-Wrapped{background:var(--accent);color:#fff}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .chip{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer;font-family:inherit}
@@ -103,6 +103,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 table.sum{width:100%;border-collapse:collapse;font-size:14px}
 table.sum th,table.sum td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right}
 table.sum th:first-child,table.sum td:first-child{text-align:left}
+@media (min-width:420px){table.sum td:first-child{white-space:nowrap}}
 table.sum tfoot td{font-weight:800}
 .snow{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .snow i{position:absolute;top:-10px;color:#fff;opacity:.5;animation:fall linear infinite}
