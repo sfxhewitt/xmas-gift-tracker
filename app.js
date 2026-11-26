@@ -77,14 +77,14 @@
   }
   // Pass an undo function to add an "Undo" button to the message (it then stays up longer).
   function toast(msg, undo) {
-    var t = $('#toast'); t.textContent = msg;
+    var t = $('#toast'), b = null; t.textContent = msg;
     if (undo) {
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'toast-undo'; b.textContent = 'Undo';
+      b = document.createElement('button'); b.type = 'button'; b.className = 'toast-undo'; b.textContent = 'Undo';
       b.addEventListener('click', function () { clearTimeout(toast._t); t.classList.remove('show'); undo(); });
       t.appendChild(b);
     }
     t.classList.toggle('has-undo', !!undo);
-    t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, undo ? 6000 : 2200);
+    t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); if (b) b.disabled = true; }, undo ? 6000 : 2200);
   }
   // Undo for a status tap: puts the item back to the status it had, if it is still on the list.
   function undoStatus(id, was) {
@@ -651,7 +651,7 @@
     save(); render(); toast('Added to ' + kid.name + '’s To buy list. Getting the details…');
 
     fetchProduct(url).then(function (info) {
-      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) return;
+      var it = state.items.filter(function (i) { return i.id === item.id; })[0]; if (!it) { delete item.fetching; return; } // deleted meanwhile; clear the flag in case Undo puts it back
       delete it.fetching; if (info && info.log) it.lookup = info.log;
       if (info && info.failed) info = null;
       if (info) {
