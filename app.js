@@ -191,6 +191,9 @@
   function kidItems(kid) { return state.items.filter(function (i) { return i.kidId === kid.id; }); }
   function planned(items) { return items.filter(function (i) { return i.status === 'Idea' || i.status === 'Saved'; }); }
   function bought(items) { return items.filter(function (i) { return i.status === 'Bought' || i.status === 'Wrapped'; }); }
+  // Bought items with no price, or only an estimate, make the Bought total understated or rough.
+  function unpriced(items) { return items.filter(function (i) { return num(i.price) == null; }).length; }
+  function anyEstimate(items) { return items.some(function (i) { return i.estimate && num(i.price) != null; }); }
   function budgetRemaining(kid) { var b = num(kid.budget); if (b == null) return null; return b - sum(bought(kidItems(kid))); }
 
   // ---------- rendering
@@ -219,7 +222,7 @@
   function getKid(id) { for (var i = 0; i < state.kids.length; i++) if (state.kids[i].id === id) return state.kids[i]; return null; }
 
   function statBlock(kid) {
-    var its = kidItems(kid), p = sum(planned(its)), b = sum(bought(its)), bud = num(kid.budget);
+    var its = kidItems(kid), p = sum(planned(its)), b = sum(bought(its)), bud = num(kid.budget), bn = unpriced(bought(its));
     var rem = bud == null ? null : bud - b, after = bud == null ? null : bud - b - p;
     var bar = '';
     if (bud) {
@@ -228,7 +231,7 @@
     }
     return '<div class="stats">' +
       '<div class="stat"><div class="k">Budget</div><div class="v">' + (bud == null ? '<span class="muted">not set</span>' : gbp(bud)) + '</div></div>' +
-      '<div class="stat"><div class="k">Bought</div><div class="v">' + gbp(b) + '</div></div>' +
+      '<div class="stat"><div class="k">Bought</div><div class="v">' + gbp(b, anyEstimate(bought(its))) + '</div>' + (bn ? '<div class="k">plus ' + bn + ' with no price</div>' : '') + '</div>' +
       '<div class="stat"><div class="k">Still to buy</div><div class="v">' + gbp(p) + '</div></div>' +
       '<div class="stat"><div class="k">Budget left</div><div class="v ' + (after != null && after < 0 ? 'over' : '') + '">' + (rem == null ? '—' : gbp(rem)) + '</div>' +
       (after == null ? '' : '<div class="k ' + (after < 0 ? 'over' : '') + '">' + (after < 0 ? gbp(-after) + ' over if all bought' : gbp(after) + ' after plan') + '</div>') + '</div>' +
@@ -326,15 +329,16 @@
     var rows = state.kids.map(function (k) {
       var its = kidItems(k), p = sum(planned(its)), b = sum(bought(its)), bud = num(k.budget);
       var left = bud == null ? null : bud - b - p;
-      return { k: k, p: p, b: b, bud: bud, left: left };
+      return { k: k, p: p, b: b, bud: bud, left: left, bn: unpriced(bought(its)), be: anyEstimate(bought(its)) };
     });
-    var T = rows.reduce(function (t, r) { t.p += r.p; t.b += r.b; if (r.bud != null) { t.bud += r.bud; t.left += r.left; t.hasBud = true; } return t; }, { p: 0, b: 0, bud: 0, left: 0, hasBud: false });
+    var T = rows.reduce(function (t, r) { t.p += r.p; t.b += r.b; t.bn += r.bn; t.be = t.be || r.be; if (r.bud != null) { t.bud += r.bud; t.left += r.left; t.hasBud = true; } return t; }, { p: 0, b: 0, bud: 0, left: 0, hasBud: false, bn: 0, be: false });
     var h = '<section class="card"><h2>💷 Money overview</h2><div style="overflow-x:auto"><table class="sum"><thead><tr><th>Kid</th><th>Budget</th><th>Bought</th><th>To buy</th><th>Left after plan</th></tr></thead><tbody>' +
       rows.map(function (r) {
-        return '<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + kidColour(r.k) + '"></span> ' + esc(r.k.name) + '</td><td>' + (r.bud == null ? '—' : gbp(r.bud)) + '</td><td>' + gbp(r.b) + '</td><td>' + gbp(r.p) + '</td><td class="' + (r.left != null && r.left < 0 ? 'over' : '') + '">' + (r.left == null ? '—' : gbp(r.left)) + '</td></tr>';
+        return '<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + kidColour(r.k) + '"></span> ' + esc(r.k.name) + '</td><td>' + (r.bud == null ? '—' : gbp(r.bud)) + '</td><td>' + gbp(r.b, r.be) + '</td><td>' + gbp(r.p) + '</td><td class="' + (r.left != null && r.left < 0 ? 'over' : '') + '">' + (r.left == null ? '—' : gbp(r.left)) + '</td></tr>';
       }).join('') +
-      '</tbody><tfoot><tr><td>Total</td><td>' + (T.hasBud ? gbp(T.bud) : '—') + '</td><td>' + gbp(T.b) + '</td><td>' + gbp(T.p) + '</td><td class="' + (T.hasBud && T.left < 0 ? 'over' : '') + '">' + (T.hasBud ? gbp(T.left) : '—') + '</td></tr></tfoot></table></div>' +
-      '<p class="muted small">Left after plan only counts kids with a budget set. Everything = ' + gbp(T.p + T.b) + ' (bought ' + gbp(T.b) + ' + still to buy ' + gbp(T.p) + '). Items without a price count as £0; “~” prices are estimates. Set budgets on each kid’s profile.</p></section>';
+      '</tbody><tfoot><tr><td>Total</td><td>' + (T.hasBud ? gbp(T.bud) : '—') + '</td><td>' + gbp(T.b, T.be) + '</td><td>' + gbp(T.p) + '</td><td class="' + (T.hasBud && T.left < 0 ? 'over' : '') + '">' + (T.hasBud ? gbp(T.left) : '—') + '</td></tr></tfoot></table></div>' +
+      (T.bn ? '<p class="small">The Bought total leaves out ' + T.bn + ' item' + (T.bn === 1 ? '' : 's') + ' with no price yet, so you’ve spent more than this. Add what you paid with ✏️ on each kid’s list.</p>' : '') +
+      '<p class="muted small">Left after plan only counts kids with a budget set. Everything = ' + gbp(T.p + T.b, T.be) + ' (bought ' + gbp(T.b, T.be) + ' + still to buy ' + gbp(T.p) + '). Items without a price count as £0; “~” prices are estimates. Set budgets on each kid’s profile.</p></section>';
 
     // fairness: presents and spend side by side
     var fair = state.kids.map(function (k) {
