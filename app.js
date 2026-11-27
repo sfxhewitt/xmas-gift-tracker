@@ -337,8 +337,8 @@
         return '<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + kidColour(r.k) + '"></span> ' + esc(r.k.name) + '</td><td>' + (r.bud == null ? '—' : gbp(r.bud)) + '</td><td>' + gbp(r.b, r.be) + '</td><td>' + gbp(r.p) + '</td><td class="' + (r.left != null && r.left < 0 ? 'over' : '') + '">' + (r.left == null ? '—' : gbp(r.left)) + '</td></tr>';
       }).join('') +
       '</tbody><tfoot><tr><td>Total</td><td>' + (T.hasBud ? gbp(T.bud) : '—') + '</td><td>' + gbp(T.b, T.be) + '</td><td>' + gbp(T.p) + '</td><td class="' + (T.hasBud && T.left < 0 ? 'over' : '') + '">' + (T.hasBud ? gbp(T.left) : '—') + '</td></tr></tfoot></table></div>' +
-      (T.bn ? '<p class="small">Bought leaves out ' + T.bn + ' bought item' + (T.bn === 1 ? '' : 's') + ' with no price yet, so you’ve spent more than this. Add what you paid with ✏️ on each kid’s list.</p>' : '') +
-      '<p class="muted small">Left after plan only counts kids with a budget set. Everything = ' + gbp(T.p + T.b) + ' (bought ' + gbp(T.b) + ' + still to buy ' + gbp(T.p) + '). Items without a price count as £0; “~” prices are estimates. Set budgets on each kid’s profile.</p></section>';
+      (T.bn ? '<p class="small">The Bought total leaves out ' + T.bn + ' item' + (T.bn === 1 ? '' : 's') + ' with no price yet, so you’ve spent more than this. Add what you paid with ✏️ on each kid’s list.</p>' : '') +
+      '<p class="muted small">Left after plan only counts kids with a budget set. Everything = ' + gbp(T.p + T.b, T.be) + ' (bought ' + gbp(T.b, T.be) + ' + still to buy ' + gbp(T.p) + '). Items without a price count as £0; “~” prices are estimates. Set budgets on each kid’s profile.</p></section>';
 
     // fairness: presents and spend side by side
     var fair = state.kids.map(function (k) {
